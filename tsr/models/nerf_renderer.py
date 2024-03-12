@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange, reduce
 
-from ..utils import (
+from nodes.KatUITripoSRPlugin.tsr.utils import (
     BaseModule,
     chunk_batch,
     get_activation,

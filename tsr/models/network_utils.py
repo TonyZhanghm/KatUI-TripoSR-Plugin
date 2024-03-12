@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
-from ..utils import BaseModule
+from nodes.KatUITripoSRPlugin.tsr.utils import BaseModule
 
 
 class TriplaneUpsampleNetwork(BaseModule):

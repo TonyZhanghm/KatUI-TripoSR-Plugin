@@ -43,8 +43,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ...utils import BaseModule
-from .basic_transformer_block import BasicTransformerBlock
+from nodes.KatUITripoSRPlugin.tsr.utils import BaseModule
+from nodes.KatUITripoSRPlugin.tsr.models.transformer.basic_transformer_block import BasicTransformerBlock
 
 
 class Transformer1D(BaseModule):

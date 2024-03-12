@@ -13,6 +13,9 @@ from typing import TypedDict
 from backend.loader.decorator import KatzukiNode
 from backend.nodes.builtin import BaseNode
 
+import sys
+sys.path.append("nodes/KatUITripoSRPlugin")
+
 from tsr.system import TSR
 from tsr.utils import remove_background, resize_foreground, save_video
 

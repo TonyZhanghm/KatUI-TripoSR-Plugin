@@ -13,8 +13,8 @@ from huggingface_hub import hf_hub_download
 from omegaconf import OmegaConf
 from PIL import Image
 
-from .models.isosurface import MarchingCubeHelper
-from .utils import (
+from nodes.KatUITripoSRPlugin.tsr.models.isosurface import MarchingCubeHelper
+from nodes.KatUITripoSRPlugin.tsr.utils import (
     BaseModule,
     ImagePreprocessor,
     find_class,

@@ -42,7 +42,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .attention import Attention
+from nodes.KatUITripoSRPlugin.tsr.models.transformer.attention import Attention
 
 
 class BasicTransformerBlock(nn.Module):

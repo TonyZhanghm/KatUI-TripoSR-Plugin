@@ -6,7 +6,7 @@ from einops import rearrange
 from huggingface_hub import hf_hub_download
 from transformers.models.vit.modeling_vit import ViTModel
 
-from ...utils import BaseModule
+from nodes.KatUITripoSRPlugin.tsr.utils import BaseModule
 
 
 class DINOSingleImageTokenizer(BaseModule):
