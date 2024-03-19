@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange, reduce
 
-from nodes.KatUITripoSRPlugin.tsr.utils import (
+from tsr.utils import (
     BaseModule,
     chunk_batch,
     get_activation,
@@ -15,6 +15,7 @@ from nodes.KatUITripoSRPlugin.tsr.utils import (
 
 
 class TriplaneNeRFRenderer(BaseModule):
+
     @dataclass
     class Config(BaseModule.Config):
         radius: float
@@ -33,9 +34,7 @@ class TriplaneNeRFRenderer(BaseModule):
         self.chunk_size = 0
 
     def set_chunk_size(self, chunk_size: int):
-        assert (
-            chunk_size >= 0
-        ), "chunk_size must be a non-negative integer (0 for no chunking)."
+        assert (chunk_size >= 0), "chunk_size must be a non-negative integer (0 for no chunking)."
         self.chunk_size = chunk_size
 
     def query_triplane(
@@ -49,9 +48,7 @@ class TriplaneNeRFRenderer(BaseModule):
 
         # positions in (-radius, radius)
         # normalized to (-1, 1) for grid sample
-        positions = scale_tensor(
-            positions, (-self.cfg.radius, self.cfg.radius), (-1, 1)
-        )
+        positions = scale_tensor(positions, (-self.cfg.radius, self.cfg.radius), (-1, 1))
 
         def _query_chunk(x):
             indices2D: torch.Tensor = torch.stack(
@@ -79,12 +76,8 @@ class TriplaneNeRFRenderer(BaseModule):
         else:
             net_out = _query_chunk(positions)
 
-        net_out["density_act"] = get_activation(self.cfg.density_activation)(
-            net_out["density"] + self.cfg.density_bias
-        )
-        net_out["color"] = get_activation(self.cfg.color_activation)(
-            net_out["features"]
-        )
+        net_out["density_act"] = get_activation(self.cfg.density_activation)(net_out["density"] + self.cfg.density_bias)
+        net_out["color"] = get_activation(self.cfg.color_activation)(net_out["features"])
 
         net_out = {k: v.view(*input_shape, -1) for k, v in net_out.items()}
 
@@ -106,15 +99,11 @@ class TriplaneNeRFRenderer(BaseModule):
         t_near, t_far, rays_valid = rays_intersect_bbox(rays_o, rays_d, self.cfg.radius)
         t_near, t_far = t_near[rays_valid], t_far[rays_valid]
 
-        t_vals = torch.linspace(
-            0, 1, self.cfg.num_samples_per_ray + 1, device=triplane.device
-        )
+        t_vals = torch.linspace(0, 1, self.cfg.num_samples_per_ray + 1, device=triplane.device)
         t_mid = (t_vals[:-1] + t_vals[1:]) / 2.0
-        z_vals = t_near * (1 - t_mid[None]) + t_far * t_mid[None]  # (N_rays, N_samples)
+        z_vals = t_near * (1 - t_mid[None]) + t_far * t_mid[None] # (N_rays, N_samples)
 
-        xyz = (
-            rays_o[:, None, :] + z_vals[..., None] * rays_d[..., None, :]
-        )  # (N_rays, N_sample, 3)
+        xyz = (rays_o[:, None, :] + z_vals[..., None] * rays_d[..., None, :]) # (N_rays, N_sample, 3)
 
         mlp_out = self.query_triplane(
             decoder=decoder,
@@ -124,10 +113,8 @@ class TriplaneNeRFRenderer(BaseModule):
 
         eps = 1e-10
         # deltas = z_vals[:, 1:] - z_vals[:, :-1] # (N_rays, N_samples)
-        deltas = t_vals[1:] - t_vals[:-1]  # (N_rays, N_samples)
-        alpha = 1 - torch.exp(
-            -deltas * mlp_out["density_act"][..., 0]
-        )  # (N_rays, N_samples)
+        deltas = t_vals[1:] - t_vals[:-1] # (N_rays, N_samples)
+        alpha = 1 - torch.exp(-deltas * mlp_out["density_act"][..., 0]) # (N_rays, N_samples)
         accum_prod = torch.cat(
             [
                 torch.ones_like(alpha[:, :1]),
@@ -135,13 +122,11 @@ class TriplaneNeRFRenderer(BaseModule):
             ],
             dim=-1,
         )
-        weights = alpha * accum_prod  # (N_rays, N_samples)
-        comp_rgb_ = (weights[..., None] * mlp_out["color"]).sum(dim=-2)  # (N_rays, 3)
-        opacity_ = weights.sum(dim=-1)  # (N_rays)
+        weights = alpha * accum_prod # (N_rays, N_samples)
+        comp_rgb_ = (weights[..., None] * mlp_out["color"]).sum(dim=-2) # (N_rays, 3)
+        opacity_ = weights.sum(dim=-1) # (N_rays)
 
-        comp_rgb = torch.zeros(
-            n_rays, 3, dtype=comp_rgb_.dtype, device=comp_rgb_.device
-        )
+        comp_rgb = torch.zeros(n_rays, 3, dtype=comp_rgb_.dtype, device=comp_rgb_.device)
         opacity = torch.zeros(n_rays, dtype=opacity_.dtype, device=opacity_.device)
         comp_rgb[rays_valid] = comp_rgb_
         opacity[rays_valid] = opacity_
@@ -162,10 +147,7 @@ class TriplaneNeRFRenderer(BaseModule):
             comp_rgb = self._forward(decoder, triplane, rays_o, rays_d)
         else:
             comp_rgb = torch.stack(
-                [
-                    self._forward(decoder, triplane[i], rays_o[i], rays_d[i])
-                    for i in range(triplane.shape[0])
-                ],
+                [self._forward(decoder, triplane[i], rays_o[i], rays_d[i]) for i in range(triplane.shape[0])],
                 dim=0,
             )
 

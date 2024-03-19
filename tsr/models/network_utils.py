@@ -5,10 +5,11 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
-from nodes.KatUITripoSRPlugin.tsr.utils import BaseModule
+from tsr.utils import BaseModule
 
 
 class TriplaneUpsampleNetwork(BaseModule):
+
     @dataclass
     class Config(BaseModule.Config):
         in_channels: int
@@ -17,15 +18,11 @@ class TriplaneUpsampleNetwork(BaseModule):
     cfg: Config
 
     def configure(self) -> None:
-        self.upsample = nn.ConvTranspose2d(
-            self.cfg.in_channels, self.cfg.out_channels, kernel_size=2, stride=2
-        )
+        self.upsample = nn.ConvTranspose2d(self.cfg.in_channels, self.cfg.out_channels, kernel_size=2, stride=2)
 
     def forward(self, triplanes: torch.Tensor) -> torch.Tensor:
         triplanes_up = rearrange(
-            self.upsample(
-                rearrange(triplanes, "B Np Ci Hp Wp -> (B Np) Ci Hp Wp", Np=3)
-            ),
+            self.upsample(rearrange(triplanes, "B Np Ci Hp Wp -> (B Np) Ci Hp Wp", Np=3)),
             "(B Np) Co Hp Wp -> B Np Co Hp Wp",
             Np=3,
         )
@@ -33,6 +30,7 @@ class TriplaneUpsampleNetwork(BaseModule):
 
 
 class NeRFMLP(BaseModule):
+
     @dataclass
     class Config(BaseModule.Config):
         in_channels: int
@@ -70,7 +68,7 @@ class NeRFMLP(BaseModule):
         layers += [
             self.make_linear(
                 self.cfg.n_neurons,
-                4,  # density 1 + features 3
+                4, # density 1 + features 3
                 bias=self.cfg.bias,
                 weight_init=self.cfg.weight_init,
                 bias_init=self.cfg.bias_init,

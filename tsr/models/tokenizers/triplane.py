@@ -5,10 +5,11 @@ import torch
 import torch.nn as nn
 from einops import rearrange, repeat
 
-from nodes.KatUITripoSRPlugin.tsr.utils import BaseModule
+from tsr.utils import BaseModule
 
 
 class Triplane1DTokenizer(BaseModule):
+
     @dataclass
     class Config(BaseModule.Config):
         plane_size: int
@@ -17,14 +18,10 @@ class Triplane1DTokenizer(BaseModule):
     cfg: Config
 
     def configure(self) -> None:
-        self.embeddings = nn.Parameter(
-            torch.randn(
-                (3, self.cfg.num_channels, self.cfg.plane_size, self.cfg.plane_size),
-                dtype=torch.float32,
-            )
-            * 1
-            / math.sqrt(self.cfg.num_channels)
-        )
+        self.embeddings = nn.Parameter(torch.randn(
+            (3, self.cfg.num_channels, self.cfg.plane_size, self.cfg.plane_size),
+            dtype=torch.float32,
+        ) * 1 / math.sqrt(self.cfg.num_channels))
 
     def forward(self, batch_size: int) -> torch.Tensor:
         return rearrange(

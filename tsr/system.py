@@ -1,4 +1,3 @@
-import math
 import os
 from dataclasses import dataclass, field
 from typing import List, Union
@@ -13,8 +12,8 @@ from huggingface_hub import hf_hub_download
 from omegaconf import OmegaConf
 from PIL import Image
 
-from nodes.KatUITripoSRPlugin.tsr.models.isosurface import MarchingCubeHelper
-from nodes.KatUITripoSRPlugin.tsr.utils import (
+from .models.isosurface import MarchingCubeHelper
+from .utils import (
     BaseModule,
     ImagePreprocessor,
     find_class,
@@ -24,6 +23,7 @@ from nodes.KatUITripoSRPlugin.tsr.utils import (
 
 
 class TSR(BaseModule):
+
     @dataclass
     class Config(BaseModule.Config):
         cond_image_size: int
@@ -49,19 +49,13 @@ class TSR(BaseModule):
     cfg: Config
 
     @classmethod
-    def from_pretrained(
-        cls, pretrained_model_name_or_path: str, config_name: str, weight_name: str
-    ):
+    def from_pretrained(cls, pretrained_model_name_or_path: str, config_name: str, weight_name: str):
         if os.path.isdir(pretrained_model_name_or_path):
             config_path = os.path.join(pretrained_model_name_or_path, config_name)
             weight_path = os.path.join(pretrained_model_name_or_path, weight_name)
         else:
-            config_path = hf_hub_download(
-                repo_id=pretrained_model_name_or_path, filename=config_name
-            )
-            weight_path = hf_hub_download(
-                repo_id=pretrained_model_name_or_path, filename=weight_name
-            )
+            config_path = hf_hub_download(repo_id=pretrained_model_name_or_path, filename=config_name)
+            weight_path = hf_hub_download(repo_id=pretrained_model_name_or_path, filename=weight_name)
 
         cfg = OmegaConf.load(config_path)
         OmegaConf.resolve(cfg)
@@ -71,14 +65,10 @@ class TSR(BaseModule):
         return model
 
     def configure(self):
-        self.image_tokenizer = find_class(self.cfg.image_tokenizer_cls)(
-            self.cfg.image_tokenizer
-        )
+        self.image_tokenizer = find_class(self.cfg.image_tokenizer_cls)(self.cfg.image_tokenizer)
         self.tokenizer = find_class(self.cfg.tokenizer_cls)(self.cfg.tokenizer)
         self.backbone = find_class(self.cfg.backbone_cls)(self.cfg.backbone)
-        self.post_processor = find_class(self.cfg.post_processor_cls)(
-            self.cfg.post_processor
-        )
+        self.post_processor = find_class(self.cfg.post_processor_cls)(self.cfg.post_processor)
         self.decoder = find_class(self.cfg.decoder_cls)(self.cfg.decoder)
         self.renderer = find_class(self.cfg.renderer_cls)(self.cfg.renderer)
         self.image_processor = ImagePreprocessor()
@@ -96,18 +86,12 @@ class TSR(BaseModule):
         ],
         device: str,
     ) -> torch.FloatTensor:
-        rgb_cond = self.image_processor(image, self.cfg.cond_image_size)[:, None].to(
-            device
-        )
+        rgb_cond = self.image_processor(image, self.cfg.cond_image_size)[:, None, ...].to(device)
         batch_size = rgb_cond.shape[0]
 
-        input_image_tokens: torch.Tensor = self.image_tokenizer(
-            rearrange(rgb_cond, "B Nv H W C -> B Nv C H W", Nv=1),
-        )
+        input_image_tokens: torch.Tensor = self.image_tokenizer(rearrange(rgb_cond, "B Nv H W C -> B Nv C H W", Nv=1),)
 
-        input_image_tokens = rearrange(
-            input_image_tokens, "B Nv C Nt -> B (Nv Nt) C", Nv=1
-        )
+        input_image_tokens = rearrange(input_image_tokens, "B Nv C Nt -> B (Nv Nt) C", Nv=1)
 
         tokens: torch.Tensor = self.tokenizer(batch_size)
 
@@ -130,9 +114,7 @@ class TSR(BaseModule):
         width: int = 256,
         return_type: str = "pil",
     ):
-        rays_o, rays_d = get_spherical_cameras(
-            n_views, elevation_deg, camera_distance, fovy_deg, height, width
-        )
+        rays_o, rays_d = get_spherical_cameras(n_views, elevation_deg, camera_distance, fovy_deg, height, width)
         rays_o, rays_d = rays_o.to(scene_codes.device), rays_d.to(scene_codes.device)
 
         def process_output(image: torch.FloatTensor):
@@ -141,9 +123,7 @@ class TSR(BaseModule):
             elif return_type == "np":
                 return image.detach().cpu().numpy()
             elif return_type == "pil":
-                return Image.fromarray(
-                    (image.detach().cpu().numpy() * 255.0).astype(np.uint8)
-                )
+                return Image.fromarray((image.detach().cpu().numpy() * 255.0).astype(np.uint8))
             else:
                 raise NotImplementedError
 
@@ -152,19 +132,14 @@ class TSR(BaseModule):
             images_ = []
             for i in range(n_views):
                 with torch.no_grad():
-                    image = self.renderer(
-                        self.decoder, scene_code, rays_o[i], rays_d[i]
-                    )
+                    image = self.renderer(self.decoder, scene_code, rays_o[i], rays_d[i])
                 images_.append(process_output(image))
             images.append(images_)
 
         return images
 
     def set_marching_cubes_resolution(self, resolution: int):
-        if (
-            self.isosurface_helper is not None
-            and self.isosurface_helper.resolution == resolution
-        ):
+        if (self.isosurface_helper is not None and self.isosurface_helper.resolution == resolution):
             return
         self.isosurface_helper = MarchingCubeHelper(resolution)
 

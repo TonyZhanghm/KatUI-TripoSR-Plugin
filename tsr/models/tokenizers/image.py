@@ -6,10 +6,11 @@ from einops import rearrange
 from huggingface_hub import hf_hub_download
 from transformers.models.vit.modeling_vit import ViTModel
 
-from nodes.KatUITripoSRPlugin.tsr.utils import BaseModule
+from tsr.utils import BaseModule
 
 
 class DINOSingleImageTokenizer(BaseModule):
+
     @dataclass
     class Config(BaseModule.Config):
         pretrained_model_name_or_path: str = "facebook/dino-vitb16"
@@ -18,14 +19,10 @@ class DINOSingleImageTokenizer(BaseModule):
     cfg: Config
 
     def configure(self) -> None:
-        self.model: ViTModel = ViTModel(
-            ViTModel.config_class.from_pretrained(
-                hf_hub_download(
-                    repo_id=self.cfg.pretrained_model_name_or_path,
-                    filename="config.json",
-                )
-            )
-        )
+        self.model: ViTModel = ViTModel(ViTModel.config_class.from_pretrained(hf_hub_download(
+            repo_id=self.cfg.pretrained_model_name_or_path,
+            filename="config.json",
+        )))
 
         if self.cfg.enable_gradient_checkpointing:
             self.model.encoder.gradient_checkpointing = True
@@ -49,14 +46,10 @@ class DINOSingleImageTokenizer(BaseModule):
 
         batch_size, n_input_views = images.shape[:2]
         images = (images - self.image_mean) / self.image_std
-        out = self.model(
-            rearrange(images, "B N C H W -> (B N) C H W"), interpolate_pos_encoding=True
-        )
+        out = self.model(rearrange(images, "B N C H W -> (B N) C H W"), interpolate_pos_encoding=True)
         local_features, global_features = out.last_hidden_state, out.pooler_output
         local_features = local_features.permute(0, 2, 1)
-        local_features = rearrange(
-            local_features, "(B N) Ct Nt -> B N Ct Nt", B=batch_size
-        )
+        local_features = rearrange(local_features, "(B N) Ct Nt -> B N Ct Nt", B=batch_size)
         if packed:
             local_features = local_features.squeeze(1)
 

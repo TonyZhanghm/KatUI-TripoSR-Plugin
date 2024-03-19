@@ -43,11 +43,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from nodes.KatUITripoSRPlugin.tsr.utils import BaseModule
-from nodes.KatUITripoSRPlugin.tsr.models.transformer.basic_transformer_block import BasicTransformerBlock
+from tsr.utils import BaseModule
+from tsr.models.transformer.basic_transformer_block import BasicTransformerBlock
 
 
 class Transformer1D(BaseModule):
+
     @dataclass
     class Config(BaseModule.Config):
         num_attention_heads: int = 16
@@ -88,32 +89,23 @@ class Transformer1D(BaseModule):
         self.proj_in = linear_cls(self.cfg.in_channels, inner_dim)
 
         # 3. Define transformers blocks
-        self.transformer_blocks = nn.ModuleList(
-            [
-                BasicTransformerBlock(
-                    inner_dim,
-                    self.num_attention_heads,
-                    self.attention_head_dim,
-                    dropout=self.cfg.dropout,
-                    cross_attention_dim=self.cfg.cross_attention_dim,
-                    activation_fn=self.cfg.activation_fn,
-                    attention_bias=self.cfg.attention_bias,
-                    only_cross_attention=self.cfg.only_cross_attention,
-                    double_self_attention=self.cfg.double_self_attention,
-                    upcast_attention=self.cfg.upcast_attention,
-                    norm_type=self.cfg.norm_type,
-                    norm_elementwise_affine=self.cfg.norm_elementwise_affine,
-                )
-                for d in range(self.cfg.num_layers)
-            ]
-        )
+        self.transformer_blocks = nn.ModuleList([BasicTransformerBlock(
+            inner_dim,
+            self.num_attention_heads,
+            self.attention_head_dim,
+            dropout=self.cfg.dropout,
+            cross_attention_dim=self.cfg.cross_attention_dim,
+            activation_fn=self.cfg.activation_fn,
+            attention_bias=self.cfg.attention_bias,
+            only_cross_attention=self.cfg.only_cross_attention,
+            double_self_attention=self.cfg.double_self_attention,
+            upcast_attention=self.cfg.upcast_attention,
+            norm_type=self.cfg.norm_type,
+            norm_elementwise_affine=self.cfg.norm_elementwise_affine,
+        ) for d in range(self.cfg.num_layers)])
 
         # 4. Define output layers
-        self.out_channels = (
-            self.cfg.in_channels
-            if self.cfg.out_channels is None
-            else self.cfg.out_channels
-        )
+        self.out_channels = (self.cfg.in_channels if self.cfg.out_channels is None else self.cfg.out_channels)
 
         self.proj_out = linear_cls(inner_dim, self.cfg.in_channels)
 
@@ -171,9 +163,7 @@ class Transformer1D(BaseModule):
 
         # convert encoder_attention_mask to a bias the same way we do for attention_mask
         if encoder_attention_mask is not None and encoder_attention_mask.ndim == 2:
-            encoder_attention_mask = (
-                1 - encoder_attention_mask.to(hidden_states.dtype)
-            ) * -10000.0
+            encoder_attention_mask = (1 - encoder_attention_mask.to(hidden_states.dtype)) * -10000.0
             encoder_attention_mask = encoder_attention_mask.unsqueeze(1)
 
         # 1. Input
@@ -182,9 +172,7 @@ class Transformer1D(BaseModule):
 
         hidden_states = self.norm(hidden_states)
         inner_dim = hidden_states.shape[1]
-        hidden_states = hidden_states.permute(0, 2, 1).reshape(
-            batch, seq_len, inner_dim
-        )
+        hidden_states = hidden_states.permute(0, 2, 1).reshape(batch, seq_len, inner_dim)
         hidden_states = self.proj_in(hidden_states)
 
         # 2. Blocks
@@ -208,11 +196,7 @@ class Transformer1D(BaseModule):
 
         # 3. Output
         hidden_states = self.proj_out(hidden_states)
-        hidden_states = (
-            hidden_states.reshape(batch, seq_len, inner_dim)
-            .permute(0, 2, 1)
-            .contiguous()
-        )
+        hidden_states = (hidden_states.reshape(batch, seq_len, inner_dim).permute(0, 2, 1).contiguous())
 
         output = hidden_states + residual
 

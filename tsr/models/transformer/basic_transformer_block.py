@@ -42,7 +42,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from nodes.KatUITripoSRPlugin.tsr.models.transformer.attention import Attention
+from tsr.models.transformer.attention import Attention
 
 
 class BasicTransformerBlock(nn.Module):
@@ -115,15 +115,13 @@ class BasicTransformerBlock(nn.Module):
 
             self.attn2 = Attention(
                 query_dim=dim,
-                cross_attention_dim=(
-                    cross_attention_dim if not double_self_attention else None
-                ),
+                cross_attention_dim=(cross_attention_dim if not double_self_attention else None),
                 heads=num_attention_heads,
                 dim_head=attention_head_dim,
                 dropout=dropout,
                 bias=attention_bias,
                 upcast_attention=upcast_attention,
-            )  # is self-attn if encoder_hidden_states is none
+            ) # is self-attn if encoder_hidden_states is none
         else:
             self.norm2 = None
             self.attn2 = None
@@ -159,9 +157,7 @@ class BasicTransformerBlock(nn.Module):
 
         attn_output = self.attn1(
             norm_hidden_states,
-            encoder_hidden_states=(
-                encoder_hidden_states if self.only_cross_attention else None
-            ),
+            encoder_hidden_states=(encoder_hidden_states if self.only_cross_attention else None),
             attention_mask=attention_mask,
         )
 
@@ -184,18 +180,11 @@ class BasicTransformerBlock(nn.Module):
         if self._chunk_size is not None:
             # "feed_forward_chunk_size" can be used to save memory
             if norm_hidden_states.shape[self._chunk_dim] % self._chunk_size != 0:
-                raise ValueError(
-                    f"`hidden_states` dimension to be chunked: {norm_hidden_states.shape[self._chunk_dim]} has to be divisible by chunk size: {self._chunk_size}. Make sure to set an appropriate `chunk_size` when calling `unet.enable_forward_chunking`."
-                )
+                raise ValueError(f"`hidden_states` dimension to be chunked: {norm_hidden_states.shape[self._chunk_dim]} has to be divisible by chunk size: {self._chunk_size}. Make sure to set an appropriate `chunk_size` when calling `unet.enable_forward_chunking`.")
 
             num_chunks = norm_hidden_states.shape[self._chunk_dim] // self._chunk_size
             ff_output = torch.cat(
-                [
-                    self.ff(hid_slice)
-                    for hid_slice in norm_hidden_states.chunk(
-                        num_chunks, dim=self._chunk_dim
-                    )
-                ],
+                [self.ff(hid_slice) for hid_slice in norm_hidden_states.chunk(num_chunks, dim=self._chunk_dim)],
                 dim=self._chunk_dim,
             )
         else:
@@ -278,9 +267,7 @@ class GELU(nn.Module):
         if gate.device.type != "mps":
             return F.gelu(gate, approximate=self.approximate)
         # mps: gelu is not implemented for float16
-        return F.gelu(gate.to(dtype=torch.float32), approximate=self.approximate).to(
-            dtype=gate.dtype
-        )
+        return F.gelu(gate.to(dtype=torch.float32), approximate=self.approximate).to(dtype=gate.dtype)
 
     def forward(self, hidden_states):
         hidden_states = self.proj(hidden_states)

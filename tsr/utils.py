@@ -44,15 +44,14 @@ def get_intrinsic_from_fov(fov, H, W, bs=-1):
 
 
 class BaseModule(nn.Module):
+
     @dataclass
     class Config:
         pass
 
-    cfg: Config  # add this to every subclass of BaseModule to enable static type checking
+    cfg: Config # add this to every subclass of BaseModule to enable static type checking
 
-    def __init__(
-        self, cfg: Optional[Union[dict, DictConfig]] = None, *args, **kwargs
-    ) -> None:
+    def __init__(self, cfg: Optional[Union[dict, DictConfig]] = None, *args, **kwargs) -> None:
         super().__init__()
         self.cfg = parse_structured(self.Config, cfg)
         self.configure(*args, **kwargs)
@@ -62,55 +61,28 @@ class BaseModule(nn.Module):
 
 
 class ImagePreprocessor:
-    def convert_and_resize(
+
+    def __call__(
         self,
-        image: Union[PIL.Image.Image, np.ndarray, torch.Tensor],
+        image: torch.FloatTensor,
         size: int,
-    ):
-        if isinstance(image, PIL.Image.Image):
-            image = torch.from_numpy(np.array(image).astype(np.float32) / 255.0)
-        elif isinstance(image, np.ndarray):
-            if image.dtype == np.uint8:
-                image = torch.from_numpy(image.astype(np.float32) / 255.0)
-            else:
-                image = torch.from_numpy(image)
-        elif isinstance(image, torch.Tensor):
-            pass
+    ) -> Any:
+        # input must be a float tensor in [0, 1] of size [B, C, H, W] or [C, H, W]
 
         batched = image.ndim == 4
 
         if not batched:
-            image = image[None, ...]
+            image = image[None, ...] # [1, C, H, W]
         image = F.interpolate(
-            image.permute(0, 3, 1, 2),
+            image,
             (size, size),
             mode="bilinear",
             align_corners=False,
             antialias=True,
-        ).permute(0, 2, 3, 1)
+        ) # [B, C, size, size]
+        image = image.permute(0, 2, 3, 1) # [B, H, W, C]
         if not batched:
-            image = image[0]
-        return image
-
-    def __call__(
-        self,
-        image: Union[
-            PIL.Image.Image,
-            np.ndarray,
-            torch.FloatTensor,
-            List[PIL.Image.Image],
-            List[np.ndarray],
-            List[torch.FloatTensor],
-        ],
-        size: int,
-    ) -> Any:
-        if isinstance(image, (np.ndarray, torch.FloatTensor)) and image.ndim == 4:
-            image = self.convert_and_resize(image, size)
-        else:
-            if not isinstance(image, list):
-                image = [image]
-            image = [self.convert_and_resize(im, size) for im in image]
-            image = torch.stack(image, dim=0)
+            image = image[0] # [H, W, C]
         return image
 
 
@@ -123,16 +95,10 @@ def rays_intersect_bbox(
 ):
     input_shape = rays_o.shape[:-1]
     rays_o, rays_d = rays_o.view(-1, 3), rays_d.view(-1, 3)
-    rays_d_valid = torch.where(
-        rays_d.abs() < 1e-6, torch.full_like(rays_d, 1e-6), rays_d
-    )
+    rays_d_valid = torch.where(rays_d.abs() < 1e-6, torch.full_like(rays_d, 1e-6), rays_d)
     if type(radius) in [int, float]:
-        radius = torch.FloatTensor(
-            [[-radius, radius], [-radius, radius], [-radius, radius]]
-        ).to(rays_o.device)
-    radius = (
-        1.0 - 1.0e-3
-    ) * radius  # tighten the radius to make sure the intersection point lies in the bounding box
+        radius = torch.FloatTensor([[-radius, radius], [-radius, radius], [-radius, radius]]).to(rays_o.device)
+    radius = (1.0 - 1.0e-3) * radius # tighten the radius to make sure the intersection point lies in the bounding box
     interx0 = (radius[..., 1] - rays_o) / rays_d_valid
     interx1 = (radius[..., 0] - rays_o) / rays_d_valid
     t_near = torch.minimum(interx0, interx1).amax(dim=-1).clamp_min(near)
@@ -159,21 +125,15 @@ def chunk_batch(func: Callable, chunk_size: int, *args, **kwargs) -> Any:
         if isinstance(arg, torch.Tensor):
             B = arg.shape[0]
             break
-    assert (
-        B is not None
-    ), "No tensor found in args or kwargs, cannot determine batch size."
+    assert (B is not None), "No tensor found in args or kwargs, cannot determine batch size."
     out = defaultdict(list)
     out_type = None
     # max(1, B) to support B == 0
     for i in range(0, max(1, B), chunk_size):
         out_chunk = func(
-            *[
-                arg[i : i + chunk_size] if isinstance(arg, torch.Tensor) else arg
-                for arg in args
-            ],
+            *[arg[i:i + chunk_size] if isinstance(arg, torch.Tensor) else arg for arg in args],
             **{
-                k: arg[i : i + chunk_size] if isinstance(arg, torch.Tensor) else arg
-                for k, arg in kwargs.items()
+                k: arg[i:i + chunk_size] if isinstance(arg, torch.Tensor) else arg for k, arg in kwargs.items()
             },
         )
         if out_chunk is None:
@@ -187,9 +147,7 @@ def chunk_batch(func: Callable, chunk_size: int, *args, **kwargs) -> Any:
         elif isinstance(out_chunk, dict):
             pass
         else:
-            print(
-                f"Return value of func must be in type [torch.Tensor, list, tuple, dict], get {type(out_chunk)}."
-            )
+            print(f"Return value of func must be in type [torch.Tensor, list, tuple, dict], get {type(out_chunk)}.")
             exit(1)
         for k, v in out_chunk.items():
             v = v if torch.is_grad_enabled() else v.detach()
@@ -206,9 +164,7 @@ def chunk_batch(func: Callable, chunk_size: int, *args, **kwargs) -> Any:
         elif all([isinstance(vv, torch.Tensor) for vv in v]):
             out_merged[k] = torch.cat(v, dim=0)
         else:
-            raise TypeError(
-                f"Unsupported types in return value of func: {[type(vv) for vv in v if not isinstance(vv, torch.Tensor)]}"
-            )
+            raise TypeError(f"Unsupported types in return value of func: {[type(vv) for vv in v if not isinstance(vv, torch.Tensor)]}")
 
     if out_type is torch.Tensor:
         return out_merged[0]
@@ -305,29 +261,23 @@ def get_rays(
     # Rotate ray directions from camera coordinate to the world coordinate
     assert directions.shape[-1] == 3
 
-    if directions.ndim == 2:  # (N_rays, 3)
-        if c2w.ndim == 2:  # (4, 4)
+    if directions.ndim == 2: # (N_rays, 3)
+        if c2w.ndim == 2: # (4, 4)
             c2w = c2w[None, :, :]
-        assert c2w.ndim == 3  # (N_rays, 4, 4) or (1, 4, 4)
-        rays_d = (directions[:, None, :] * c2w[:, :3, :3]).sum(-1)  # (N_rays, 3)
+        assert c2w.ndim == 3 # (N_rays, 4, 4) or (1, 4, 4)
+        rays_d = (directions[:, None, :] * c2w[:, :3, :3]).sum(-1) # (N_rays, 3)
         rays_o = c2w[:, :3, 3].expand(rays_d.shape)
-    elif directions.ndim == 3:  # (H, W, 3)
+    elif directions.ndim == 3: # (H, W, 3)
         assert c2w.ndim in [2, 3]
-        if c2w.ndim == 2:  # (4, 4)
-            rays_d = (directions[:, :, None, :] * c2w[None, None, :3, :3]).sum(
-                -1
-            )  # (H, W, 3)
+        if c2w.ndim == 2: # (4, 4)
+            rays_d = (directions[:, :, None, :] * c2w[None, None, :3, :3]).sum(-1) # (H, W, 3)
             rays_o = c2w[None, None, :3, 3].expand(rays_d.shape)
-        elif c2w.ndim == 3:  # (B, 4, 4)
-            rays_d = (directions[None, :, :, None, :] * c2w[:, None, None, :3, :3]).sum(
-                -1
-            )  # (B, H, W, 3)
+        elif c2w.ndim == 3: # (B, 4, 4)
+            rays_d = (directions[None, :, :, None, :] * c2w[:, None, None, :3, :3]).sum(-1) # (B, H, W, 3)
             rays_o = c2w[:, None, None, :3, 3].expand(rays_d.shape)
-    elif directions.ndim == 4:  # (B, H, W, 3)
-        assert c2w.ndim == 3  # (B, 4, 4)
-        rays_d = (directions[:, :, :, None, :] * c2w[:, None, None, :3, :3]).sum(
-            -1
-        )  # (B, H, W, 3)
+    elif directions.ndim == 4: # (B, H, W, 3)
+        assert c2w.ndim == 3 # (B, 4, 4)
+        rays_d = (directions[:, :, :, None, :] * c2w[:, None, None, :3, :3]).sum(-1) # (B, H, W, 3)
         rays_o = c2w[:, None, None, :3, 3].expand(rays_d.shape)
 
     if normalize:
@@ -390,9 +340,7 @@ def get_spherical_cameras(
         focal=1.0,
     )
     directions = directions_unit_focal[None, :, :, :].repeat(n_views, 1, 1, 1)
-    directions[:, :, :, :2] = (
-        directions[:, :, :, :2] / focal_length[:, None, None, None]
-    )
+    directions[:, :, :, :2] = (directions[:, :, :, :2] / focal_length[:, None, None, None])
     # must use normalize=True to normalize directions here
     rays_o, rays_d = get_rays(directions, c2w, keepdim=True, normalize=True)
 
@@ -469,6 +417,6 @@ def save_video(
 
 
 def to_gradio_3d_orientation(mesh):
-    mesh.apply_transform(trimesh.transformations.rotation_matrix(-np.pi/2, [1, 0, 0]))
-    mesh.apply_transform(trimesh.transformations.rotation_matrix(np.pi/2, [0, 1, 0]))
+    mesh.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2, [1, 0, 0]))
+    mesh.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [0, 1, 0]))
     return mesh
