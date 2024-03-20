@@ -103,7 +103,7 @@ class TriplaneNeRFRenderer(BaseModule):
         t_mid = (t_vals[:-1] + t_vals[1:]) / 2.0
         z_vals = t_near * (1 - t_mid[None]) + t_far * t_mid[None] # (N_rays, N_samples)
 
-        xyz = (rays_o[:, None, :] + z_vals[..., None] * rays_d[..., None, :]) # (N_rays, N_sample, 3)
+        xyz = (rays_o[rays_valid][:, None, :] + z_vals[..., None] * rays_d[rays_valid][..., None, :]) # (N_rays, N_sample, 3)
 
         mlp_out = self.query_triplane(
             decoder=decoder,
@@ -137,11 +137,11 @@ class TriplaneNeRFRenderer(BaseModule):
         return comp_rgb
 
     def forward(
-        self,
-        decoder: torch.nn.Module,
-        triplane: torch.Tensor,
-        rays_o: torch.Tensor,
-        rays_d: torch.Tensor,
+            self,
+            decoder: torch.nn.Module,
+            triplane: torch.Tensor, # [3, 40, 64, 64]
+            rays_o: torch.Tensor, # [256, 256, 3], centered at 0
+            rays_d: torch.Tensor, # [256, 256, 3]
     ) -> Dict[str, torch.Tensor]:
         if triplane.ndim == 4:
             comp_rgb = self._forward(decoder, triplane, rays_o, rays_d)
