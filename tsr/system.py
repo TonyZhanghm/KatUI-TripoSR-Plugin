@@ -1,12 +1,12 @@
 import os
-from dataclasses import dataclass, field
-from typing import List, Union
-
 import numpy as np
 import PIL.Image
 import torch
 import torch.nn.functional as F
 import trimesh
+
+from dataclasses import dataclass, field
+from typing import List, Union
 from einops import rearrange
 from huggingface_hub import hf_hub_download
 from omegaconf import OmegaConf
@@ -102,6 +102,24 @@ class TSR(BaseModule):
 
         scene_codes = self.post_processor(self.tokenizer.detokenize(tokens))
         return scene_codes
+
+    def render_one(
+            self,
+            scene_code: torch.Tensor, # [3, 40, 64, 64]
+            rays_o: torch.Tensor, # [256, 256, 3]
+            rays_d: torch.Tensor, # [256, 256, 3]
+    ):
+        with torch.no_grad():
+            print(f"shape of scene_code: {scene_code.shape}")
+            print(f"shape of rays_o: {rays_o.shape}")
+            print(f"shape of rays_d: {rays_d.shape}")
+            image = self.renderer(
+                self.decoder,
+                scene_code,
+                rays_o,
+                rays_d,
+            )
+        return image
 
     def render(
         self,
