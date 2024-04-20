@@ -170,7 +170,7 @@ class RenderTriplane(BaseNode):
 
             step = 0
             while True:
-                signal = self.check_execution_state_change()
+                signal = self.check_execution_state_change(clear_signal_event=lambda signal: signal == "break")
                 if signal == "break":
                     break
 
