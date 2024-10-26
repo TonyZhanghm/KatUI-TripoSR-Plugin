@@ -16,7 +16,7 @@ from backend.loader.decorator import KatzukiNode
 from backend.nodes.builtin import BaseNode
 from backend.sio import sio
 from backend import variable
-from KatUIDiffusionBasics.nerf import NeRFDataset
+from KatUINeRFBasics.nerf import NeRFDataset
 from KatUIDiffusionBasics.util import should_update
 
 from tsr.system import TSR
